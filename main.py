@@ -1,9 +1,11 @@
 import csv
-from typing import List
-
+from typing import Dict, List
+import pprint
 
 # Positions of id, name, d2_class, exotic, slot, mob, res, rec, dis, int, str in the CSV Row
 CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
+
+TIER_LIMIT = 30
 
 
 class Armor:
@@ -32,6 +34,7 @@ class Armor:
         self.discipline = discipline
         self.intellect = intellect
         self.strength = strength
+        self.mark: bool = False
 
     def __le__(self, other):
         if (
@@ -123,39 +126,116 @@ class Armor:
         return cls(*params)
 
 
-armor_list: List[Armor] = []
+def build_is_valid(build: List[Armor]):
+    if not all([item.d2_class == build[0].d2_class for item in build]):
+        return False
+    number_of_exotics = 0
+    for armor in build:
+        if armor.is_exotic:
+            number_of_exotics += 1
+    if number_of_exotics > 1:
+        return False
+    return True
+
+
+def calc_build_tier(build: List[Armor]):
+    individual_tiers = [0, 0, 0, 0, 0, 0]
+    for armor in build:
+        individual_tiers[0] += armor.mobility
+        individual_tiers[1] += armor.resilience
+        individual_tiers[2] += armor.recovery
+        individual_tiers[3] += armor.discipline
+        individual_tiers[4] += armor.intellect
+        individual_tiers[5] += armor.strength
+    # Calculate effective tiers
+    for idx in range(len(individual_tiers)):
+        individual_tiers[idx] = individual_tiers[idx] // 10
+        individual_tiers[idx] = (
+            10 if individual_tiers[idx] > 10 else individual_tiers[idx]
+        )
+    total = sum(individual_tiers)
+    # Account for armor masterworks
+    total += 5
+    return total
+
+
+def mark_build(build: List[Armor]):
+    for armor in build:
+        armor.mark = True
+
+
+armor_lists: List[List[Armor]] = [[], [], [], [], []]
 
 with open("armor.csv") as csvfile:
     reader = csv.reader(csvfile, delimiter=",")
     for idx, row in enumerate(reader):
         if idx == 0:
             continue
-        armor_list.append(Armor.from_csv_row(row))
+        armor = Armor.from_csv_row(row)
+        if armor.slot.lower() == "helmet":
+            slot = 0
+        elif armor.slot.lower() == "gauntlets":
+            slot = 1
+        elif armor.slot.lower() == "chest armor":
+            slot = 2
+        elif armor.slot.lower() == "leg armor":
+            slot = 3
+        else:
+            pass
+        armor_lists[slot].append(armor)
 
+# Add generic class items
+armor_lists[4].append(
+    Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0)
+)
+armor_lists[4].append(
+    Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0)
+)
+armor_lists[4].append(
+    Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0)
+)
 
-delete_list = []
-for idx, armor in enumerate(armor_list):
-    if armor.is_exotic == True:
-        delete_list.append(idx)
-for idx in reversed(delete_list):
-    armor_list.pop(idx)
+build_counter = 0
+unmarked_armor_counter = 0
 
-delete_list = []
-for idx, armor in enumerate(armor_list):
-    if armor.slot == "Warlock Bond":
-        delete_list.append(idx)
-for idx in reversed(delete_list):
-    armor_list.pop(idx)
+for zero in armor_lists[0]:
+    for one in armor_lists[1]:
+        for two in armor_lists[2]:
+            for three in armor_lists[3]:
+                for four in armor_lists[4]:
+                    build = [zero, one, two, three, four]
+                    if build_is_valid(build):
+                        if calc_build_tier(build) >= TIER_LIMIT:
+                            mark_build(build)
+                            build_counter += 1
 
-for armor in armor_list:
-    for armor2 in armor_list:
-        if (
-            armor.slot == armor2.slot
-            and armor < armor2
-            and armor.d2_class == armor2.d2_class
-            and (
-                (armor.is_exotic and armor2.is_exotic and armor.name == armor2.name)
-                or (not armor.is_exotic and not armor2.is_exotic)
-            )
-        ):
-            print("id:", armor.id, " or", sep="", end=" ")
+# Save at least one exotic
+exotic_list = []
+for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
+    if armor.is_exotic:
+        exotic_list.append(armor)
+exotic_lists_by_name: Dict[str, List[Armor]] = {}
+for armor in exotic_list:
+    if armor.name in exotic_lists_by_name:
+        exotic_lists_by_name[armor.name].append(armor)
+    else:
+        exotic_lists_by_name[armor.name] = [armor]
+
+for name in exotic_lists_by_name:
+    if all([not armor.mark for armor in exotic_lists_by_name[name]]):
+        for armor in exotic_lists_by_name[name]:
+            armor.mark = True
+
+# Save all class items:
+for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
+    if armor.slot.lower() in ["hunter cloak", "warlock bond", "titan mark"]:
+        armor.mark = True
+
+query = str()
+for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
+    if not armor.mark:
+        unmarked_armor_counter += 1
+        query += " or id:" + str(armor.id)
+query = query[4:]
+
+print(query)
