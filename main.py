@@ -147,7 +147,6 @@ class Armor:
         params[-6] = int(params[-6])
         return cls(*params)
 
-
 class Build(List):
     def __init__(self, armor_list: List[Armor], mods_used: int = 0):
         self.extend(armor_list)
@@ -238,6 +237,42 @@ class try_achieve_build(list):
     def strength(self, strength: int):
         return self._general_stat_func("strength")
 
+def generic_class_items() -> List[Armor]:
+    # Add generic class items
+    li = []
+    li.append(
+        Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0)
+    )
+    li.append(
+        Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0)
+    )
+    li.append(
+        Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0)
+    )
+    return li
+
+def save_exotics(armor_list):
+    # List all exotics
+    exotic_list = []
+    for armor in armor_list:
+        if armor.is_exotic:
+            exotic_list.append(armor)
+
+    # Sort exotics by name
+    exotic_lists_by_name: Dict[str, List[Armor]] = {}
+    for armor in exotic_list:
+        if armor.name in exotic_lists_by_name:
+            exotic_lists_by_name[armor.name].append(armor)
+        else:
+            exotic_lists_by_name[armor.name] = [armor]
+
+    # if all exotics with a name are not marked to be saved
+    # mark all of them to show they shouldn't be dismantled
+    for name in exotic_lists_by_name:
+        if all([not armor.mark for armor in exotic_lists_by_name[name]]):
+            for armor in exotic_lists_by_name[name]:
+                armor.mark = True
+
 
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
 
@@ -259,16 +294,7 @@ with open("armor.csv") as csvfile:
             pass
         armor_lists[slot].append(armor)
 
-# Add generic class items
-armor_lists[4].append(
-    Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0)
-)
-armor_lists[4].append(
-    Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0)
-)
-armor_lists[4].append(
-    Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0)
-)
+armor_lists[4] = generic_class_items()
 
 # Iterate through all possible armor combinations                    
 for armor_set in itertools.product(*armor_lists):
@@ -277,28 +303,14 @@ for armor_set in itertools.product(*armor_lists):
         if build.calculate_tier() >= TIER_LIMIT:
             build.mark()
 
-# Save at least one exotic
-exotic_list = []
-for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
-    if armor.is_exotic:
-        exotic_list.append(armor)
-exotic_lists_by_name: Dict[str, List[Armor]] = {}
-for armor in exotic_list:
-    if armor.name in exotic_lists_by_name:
-        exotic_lists_by_name[armor.name].append(armor)
-    else:
-        exotic_lists_by_name[armor.name] = [armor]
-
-for name in exotic_lists_by_name:
-    if all([not armor.mark for armor in exotic_lists_by_name[name]]):
-        for armor in exotic_lists_by_name[name]:
-            armor.mark = True
+save_exotics(armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3])
 
 # Save all class items:
 for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
     if armor.slot.lower() in ["hunter cloak", "warlock bond", "titan mark"]:
         armor.mark = True
 
+# Generate a DIM query to highlight all useless armor
 query = str()
 unmarked_armor_counter = 0
 for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
