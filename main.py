@@ -1,5 +1,6 @@
 import csv
 import argparse
+import itertools
 from typing import Dict, List
 from enum import Enum
 
@@ -269,15 +270,12 @@ armor_lists[4].append(
     Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0)
 )
 
-for zero in armor_lists[0]:
-    for one in armor_lists[1]:
-        for two in armor_lists[2]:
-            for three in armor_lists[3]:
-                for four in armor_lists[4]:
-                    build = Build([zero, one, two, three, four])
-                    if build.is_valid():
-                        if build.calculate_tier() >= TIER_LIMIT:
-                            build.mark()
+# Iterate through all possible armor combinations                    
+for armor_set in itertools.product(*armor_lists):
+    build = Build(armor_set)
+    if build.is_valid():
+        if build.calculate_tier() >= TIER_LIMIT:
+            build.mark()
 
 # Save at least one exotic
 exotic_list = []
