@@ -11,6 +11,7 @@ CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
 parser = argparse.ArgumentParser(description='List armor to dismantle')
 parser.add_argument('--mods', action='store_true', help='Enable mods')
 parser.add_argument('--tier', type=int, help='Minimum build tier')
+parser.add_argument('armor_file', type=str, help='armor.csv file from DIM')
 args = parser.parse_args()
 BASE_MODS_ENABLED = args.mods
 if args.tier is None:
@@ -19,7 +20,7 @@ if args.tier is None:
         TIER_LIMIT += 5
 else:
     TIER_LIMIT = args.tier
-
+ARMOR_FILE = args.armor_file
 
 class Stat(Enum):
     MOBILITY = 0
@@ -276,7 +277,7 @@ def save_exotics(armor_list):
 
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
 
-with open("armor.csv") as csvfile:
+with open(ARMOR_FILE) as csvfile:
     reader = csv.reader(csvfile, delimiter=",")
     for idx, row in enumerate(reader):
         if idx == 0:
