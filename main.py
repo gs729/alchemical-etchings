@@ -51,49 +51,29 @@ class Armor:
         self.d2_class = d2_class
         self.is_exotic = is_exotic
         self.slot = slot
-        self.mobility = mobility
-        self.resilience = resilience
-        self.recovery = recovery
-        self.discipline = discipline
-        self.intellect = intellect
-        self.strength = strength
         self.mark: bool = False
+        self.stats = [0] * 6
+        self.stats[Stat.MOBILITY.value] = mobility
+        self.stats[Stat.RESILIENCE.value] = resilience
+        self.stats[Stat.RECOVERY.value] = recovery
+        self.stats[Stat.DISCIPLINE.value] = discipline
+        self.stats[Stat.INTELLECT.value] = intellect
+        self.stats[Stat.STRENGTH.value] = strength
 
     def __le__(self, other):
-        if (
-            self.mobility <= other.mobility
-            and self.resilience <= other.resilience
-            and self.recovery <= other.recovery
-            and self.discipline <= other.discipline
-            and self.intellect <= other.intellect
-            and self.strength <= other.strength
-        ):
+        if all([self.stats[i] <= other.stats[i] for i in range(6)]):
             return True
         else:
             return False
 
     def __ge__(self, other):
-        if (
-            self.mobility >= other.mobility
-            and self.resilience >= other.resilience
-            and self.recovery >= other.recovery
-            and self.discipline >= other.discipline
-            and self.intellect >= other.intellect
-            and self.strength >= other.strength
-        ):
+        if all([self.stats[i] >= other.stats[i] for i in range(6)]):
             return True
         else:
             return False
 
     def __eq__(self, other):
-        if (
-            self.mobility == other.mobility
-            and self.resilience == other.resilience
-            and self.recovery == other.recovery
-            and self.discipline == other.discipline
-            and self.intellect == other.intellect
-            and self.strength == other.strength
-        ):
+        if all([self.stats[i] == other.stats[i] for i in range(6)]):
             return True
         else:
             return False
@@ -135,18 +115,14 @@ class Armor:
     @classmethod
     def from_csv_row(cls, csv_row):
         params = [csv_row[i] for i in CSV_ROW_DEFN]
-        params[0] = int(params[0].strip('"'))
-        if params[3].lower() == "exotic":
-            params[3] = True
+        self = cls(*params)
+        self.id = int(self.id.strip('"'))
+        if self.is_exotic.lower() == "exotic":
+            self.is_exotic = True
         else:
-            params[3] = False
-        params[-1] = int(params[-1])
-        params[-2] = int(params[-2])
-        params[-3] = int(params[-3])
-        params[-4] = int(params[-4])
-        params[-5] = int(params[-5])
-        params[-6] = int(params[-6])
-        return cls(*params)
+            self.is_exotic = False
+        self.stats = [int(stat) for stat in self.stats]
+        return self
 
 class Build(List):
     def __init__(self, armor_list: List[Armor], mods_used: int = 0):
@@ -154,12 +130,8 @@ class Build(List):
         self.mods_used = mods_used
         self.stats = [0, 0, 0, 0, 0, 0]
         for armor in self:
-            self.stats[Stat.MOBILITY.value] += armor.mobility
-            self.stats[Stat.RESILIENCE.value] += armor.resilience
-            self.stats[Stat.RECOVERY.value] += armor.recovery
-            self.stats[Stat.DISCIPLINE.value] += armor.discipline
-            self.stats[Stat.INTELLECT.value] += armor.intellect
-            self.stats[Stat.STRENGTH.value] += armor.strength
+            for stat in Stat:
+                self.stats[stat.value] += armor.stats[stat.value]
         
     def add_mods(build):
         for idx, tier in enumerate(build.stats):
