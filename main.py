@@ -1,6 +1,9 @@
 import csv
 import argparse
+import hashlib
 import itertools
+import pickle
+from tqdm import tqdm
 from typing import Dict, List
 from enum import Enum
 
@@ -8,10 +11,10 @@ from enum import Enum
 CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
 
 # Argument parsing
-parser = argparse.ArgumentParser(description='List armor to dismantle')
-parser.add_argument('--mods', action='store_true', help='Enable mods')
-parser.add_argument('--tier', type=int, help='Minimum build tier')
-parser.add_argument('armor_file', type=str, help='armor.csv file from DIM')
+parser = argparse.ArgumentParser(description="List armor to dismantle")
+parser.add_argument("--mods", action="store_true", help="Enable mods")
+parser.add_argument("--tier", type=int, help="Minimum build tier")
+parser.add_argument("armor_file", type=str, help="armor.csv file from DIM")
 args = parser.parse_args()
 BASE_MODS_ENABLED = args.mods
 if args.tier is None:
@@ -22,6 +25,7 @@ else:
     TIER_LIMIT = args.tier
 ARMOR_FILE = args.armor_file
 
+
 class Stat(Enum):
     MOBILITY = 0
     RESILIENCE = 1
@@ -29,6 +33,37 @@ class Stat(Enum):
     DISCIPLINE = 3
     INTELLECT = 4
     STRENGTH = 5
+
+
+# Mods
+class Mod:
+    registry = []
+
+    def __init__(self, name: str, energy_cost: int, stat_delta: List[int]):
+        self.name = name
+        self.energy_cost = energy_cost
+        self.stat_delta = stat_delta
+        for idx, mod in enumerate(self.registry):
+            if mod.energy_cost > energy_cost:
+                break
+        self.registry.insert(idx, self)
+
+    @classmethod
+    def mod_for_delta(
+        cls, stat_delta: List[int] = [10, 10, 10, 10, 10, 10], energy_budget: int = 10
+    ):
+        """Takes a stat delta and returns the mod that would best help minimise it
+
+        Returns:
+            Mod: Mod that best works towards minimising the delta
+        """
+        candidate_mods = [
+            mod for mod in cls.registry if mod.energy_cost <= energy_budget
+        ]
+        current_best_stat_delta = stat_delta
+        for mod in candidate_mods:
+            if stat_delta - mod.stat_delta < current_best_stat_delta:
+                pass
 
 
 class Armor:
@@ -51,7 +86,7 @@ class Armor:
         self.d2_class = d2_class
         self.is_exotic = is_exotic
         self.slot = slot
-        self.mark: bool = False
+        self.mark: int = 0
         self.stats = [0] * 6
         self.stats[Stat.MOBILITY.value] = mobility
         self.stats[Stat.RESILIENCE.value] = resilience
@@ -124,6 +159,7 @@ class Armor:
         self.stats = [int(stat) for stat in self.stats]
         return self
 
+
 class Build(List):
     def __init__(self, armor_list: List[Armor], mods_used: int = 0):
         self.extend(armor_list)
@@ -132,7 +168,7 @@ class Build(List):
         for armor in self:
             for stat in Stat:
                 self.stats[stat.value] += armor.stats[stat.value]
-        
+
     def add_mods(build):
         for idx, tier in enumerate(build.stats):
             # This formula checks if a tier can benefit from a +5 mod
@@ -149,7 +185,14 @@ class Build(List):
 
     def calculate_tier(build):
         # Calculate effective tiers
-        individual_tiers = [0, 0, 0, 0, 0, 0,]
+        individual_tiers = [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ]
         for idx in range(len(build.stats)):
             if BASE_MODS_ENABLED:
                 build.add_mods()
@@ -161,10 +204,11 @@ class Build(List):
         # Account for armor masterworks
         total += 6
         return total
-    
-    def mark(build):
+
+    def mark(build, tier):
         for armor in build:
-            armor.mark = True
+            if armor.mark <= tier:
+                armor.mark = tier
 
     def is_valid(build):
         if not all([item.d2_class == build[0].d2_class for item in build]):
@@ -176,6 +220,7 @@ class Build(List):
         if number_of_exotics > 1:
             return False
         return True
+
 
 class try_achieve_build(list):
     def __init__(self, build: List[Armor], mods_used: int = 0):
@@ -210,19 +255,15 @@ class try_achieve_build(list):
     def strength(self, strength: int):
         return self._general_stat_func("strength")
 
+
 def generic_class_items() -> List[Armor]:
     # Add generic class items
     li = []
-    li.append(
-        Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0)
-    )
-    li.append(
-        Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0)
-    )
-    li.append(
-        Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0)
-    )
+    li.append(Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0))
+    li.append(Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0))
+    li.append(Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0))
     return li
+
 
 def save_exotics(armor_list):
     # List all exotics
@@ -242,52 +283,88 @@ def save_exotics(armor_list):
     # if all exotics with a name are not marked to be saved
     # mark all of them to show they shouldn't be dismantled
     for name in exotic_lists_by_name:
-        if all([not armor.mark for armor in exotic_lists_by_name[name]]):
+        if all([armor.mark < TIER_LIMIT for armor in exotic_lists_by_name[name]]):
             for armor in exotic_lists_by_name[name]:
-                armor.mark = True
+                armor.mark = 9999
 
 
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
 
-with open(ARMOR_FILE) as csvfile:
-    reader = csv.reader(csvfile, delimiter=",")
-    for idx, row in enumerate(reader):
-        if idx == 0:
-            continue
-        armor = Armor.from_csv_row(row)
-        if armor.slot.lower() == "helmet":
-            slot = 0
-        elif armor.slot.lower() == "gauntlets":
-            slot = 1
-        elif armor.slot.lower() == "chest armor":
-            slot = 2
-        elif armor.slot.lower() == "leg armor":
-            slot = 3
-        else:
-            pass
-        armor_lists[slot].append(armor)
+with open(ARMOR_FILE, "rb", buffering=0) as csvfile:
+    sha1 = hashlib.sha1()
+    while True:
+        data = csvfile.read(4096)
+        if not data:
+            break
+        sha1.update(data)
+    csvfile_hash = sha1.hexdigest()
 
-armor_lists[4] = generic_class_items()
+try:
+    # Load pickle file as cache here
+    with open(str(csvfile_hash) + ".pickle", "rb") as processed_armor:
+        combined_armor_list = pickle.load(processed_armor)
+except FileNotFoundError:
+    with open(ARMOR_FILE) as csvfile:
+        reader = csv.reader(csvfile, delimiter=",")
+        for idx, row in enumerate(reader):
+            if idx == 0:
+                continue
+            armor = Armor.from_csv_row(row)
+            if armor.slot.lower() == "helmet":
+                slot = 0
+            elif armor.slot.lower() == "gauntlets":
+                slot = 1
+            elif armor.slot.lower() == "chest armor":
+                slot = 2
+            elif armor.slot.lower() == "leg armor":
+                slot = 3
+            else:
+                pass
+            armor_lists[slot].append(armor)
 
-# Iterate through all possible armor combinations                    
-for armor_set in itertools.product(*armor_lists):
-    build = Build(armor_set)
-    if build.is_valid():
-        if build.calculate_tier() >= TIER_LIMIT:
-            build.mark()
+    armor_lists[4] = generic_class_items()
+
+    total_armor_pieces = (
+        len(armor_lists[0])
+        + len(armor_lists[1])
+        + len(armor_lists[2])
+        + len(armor_lists[3])
+        + len(armor_lists[4])
+    )
+    total_armor_sets = (
+        len(armor_lists[0])
+        * len(armor_lists[1])
+        * len(armor_lists[2])
+        * len(armor_lists[3])
+        * len(armor_lists[4])
+    )
+    for armor_set in tqdm(itertools.product(*armor_lists), total=total_armor_sets):
+        build = Build(armor_set)
+        if build.is_valid():
+            build.mark(build.calculate_tier())
+
+    combined_armor_list = (
+        armor_lists[0]
+        + armor_lists[1]
+        + armor_lists[2]
+        + armor_lists[3]
+        + armor_lists[4]
+    )
+    # Create a pickle file as a cache here
+    with open(str(csvfile_hash) + ".pickle", "wb") as processed_armor:
+        pickle.dump(combined_armor_list, processed_armor)
+
 
 save_exotics(armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3])
 
-# Save all class items:
-for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
-    if armor.slot.lower() in ["hunter cloak", "warlock bond", "titan mark"]:
-        armor.mark = True
 
 # Generate a DIM query to highlight all useless armor
 query = str()
 unmarked_armor_counter = 0
+
+
 for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
-    if not armor.mark:
+    if armor.mark < TIER_LIMIT:
         unmarked_armor_counter += 1
         query += " or id:" + str(armor.id)
 query = query[4:]
