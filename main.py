@@ -288,6 +288,17 @@ def save_exotics(armor_list):
                 armor.mark = 9999
 
 
+def save_class_items(armor_list):
+    for armor in armor_list:
+        if not (
+            armor.slot.lower() == "helmet"
+            or armor.slot.lower() == "gauntlets"
+            or armor.slot.lower() == "chest armor"
+            or armor.slot.lower() == "leg armor"
+        ):
+            armor.mark = 9999
+
+
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
 
 with open(ARMOR_FILE, "rb", buffering=0) as csvfile:
@@ -355,7 +366,8 @@ except FileNotFoundError:
         pickle.dump(combined_armor_list, processed_armor)
 
 
-save_exotics(armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3])
+save_exotics(combined_armor_list)
+save_class_items(combined_armor_list)
 
 
 # Generate a DIM query to highlight all useless armor
@@ -363,7 +375,7 @@ query = str()
 unmarked_armor_counter = 0
 
 
-for armor in armor_lists[0] + armor_lists[1] + armor_lists[2] + armor_lists[3]:
+for armor in combined_armor_list:
     if armor.mark < TIER_LIMIT:
         unmarked_armor_counter += 1
         query += " or id:" + str(armor.id)
