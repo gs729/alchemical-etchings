@@ -12,20 +12,20 @@ CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
 
 # Argument parsing
 parser = argparse.ArgumentParser(description="List armor to dismantle")
-parser.add_argument("--mods", action="store_true", help="Enable mods")
 parser.add_argument("--hunter", action="store_true", help="Only process hunter armor")
 parser.add_argument("--warlock", action="store_true", help="Only process warlock armor")
 parser.add_argument("--titan", action="store_true", help="Only process titan armor")
-parser.add_argument("--tier", type=int, help="Minimum build tier")
+parser.add_argument(
+    "--score",
+    type=int,
+    help=("Minimum build score, scores range from the negatives to 32.2"),
+)
 parser.add_argument("armor_file", type=str, help="armor.csv file from DIM")
 args = parser.parse_args()
-BASE_MODS_ENABLED = args.mods
-if args.tier is None:
-    TIER_LIMIT = 31
-    if BASE_MODS_ENABLED:
-        TIER_LIMIT += 5
+if args.score is None:
+    SCORE_LIMIT = 157  # Score based on my current vault
 else:
-    TIER_LIMIT = args.tier
+    SCORE_LIMIT = args.score
 ARMOR_FILE = args.armor_file
 
 if args.hunter:
@@ -99,6 +99,7 @@ class Armor:
         self.is_exotic = is_exotic
         self.slot = slot
         self.mark: int = 0
+        self.score: float
         self.stats = [0] * 6
         self.stats[Stat.MOBILITY.value] = mobility
         self.stats[Stat.RESILIENCE.value] = resilience
@@ -206,8 +207,7 @@ class Build(List):
             0,
         ]
         for idx in range(len(build.stats)):
-            if BASE_MODS_ENABLED:
-                build.add_mods()
+            build.add_mods()
             individual_tiers[idx] = build.stats[idx] // 10
             individual_tiers[idx] = (
                 10 if individual_tiers[idx] > 10 else individual_tiers[idx]
@@ -261,9 +261,9 @@ def save_exotics(armor_list):
     # if all exotics with a name are not marked to be saved
     # mark all of them to show they shouldn't be dismantled
     for name in exotic_lists_by_name:
-        if all([armor.mark < TIER_LIMIT for armor in exotic_lists_by_name[name]]):
+        if all([armor.mark < SCORE_LIMIT for armor in exotic_lists_by_name[name]]):
             for armor in exotic_lists_by_name[name]:
-                armor.mark = 9999
+                armor.score = 9999
 
 
 def save_class_items(armor_list):
@@ -274,7 +274,7 @@ def save_class_items(armor_list):
             or armor.slot.lower() == "chest armor"
             or armor.slot.lower() == "leg armor"
         ):
-            armor.mark = 9999
+            armor.score = 9999
 
 
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
@@ -350,6 +350,20 @@ except FileNotFoundError:
         pickle.dump(combined_armor_list, processed_armor)
 
 
+for armor in combined_armor_list:
+    if armor.slot == 4:
+        continue
+    armor.score = (
+        (armor.mark - 34) * 1.2  # 0 to 3.6
+        + (sum(armor.stats) - 58) * 1.5  # 0 to 15
+        # Meta dependent scores:
+        + (armor.stats[Stat.RECOVERY.value] - 2) * 0.2  # 0 to 5.6
+        # Spike score to allow flexibility:
+        + (sum(armor.stats[:3]) - min(armor.stats[:3]) - 16) * 0.25  # 0 to 4
+        + (sum(armor.stats[3:]) - min(armor.stats[3:]) - 16) * 0.25  # 0 to 4
+    )
+
+
 save_exotics(combined_armor_list)
 save_class_items(combined_armor_list)
 
@@ -360,10 +374,15 @@ unmarked_armor_counter = 0
 
 
 for armor in combined_armor_list:
-    if armor.mark < TIER_LIMIT:
+    if armor.score < SCORE_LIMIT and armor.slot != 4:
         unmarked_armor_counter += 1
         query += " or id:" + str(armor.id)
 query = query[4:]
+
+for armor in combined_armor_list:
+    if armor.slot == 4:
+        continue
+    print(armor.id, armor.score)
 
 print("\n" + query + "\n")
 print("Number of junk armor pieces:", unmarked_armor_counter)
