@@ -13,6 +13,9 @@ CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
 # Argument parsing
 parser = argparse.ArgumentParser(description="List armor to dismantle")
 parser.add_argument("--mods", action="store_true", help="Enable mods")
+parser.add_argument("--hunter", action="store_true", help="Only process hunter armor")
+parser.add_argument("--warlock", action="store_true", help="Only process warlock armor")
+parser.add_argument("--titan", action="store_true", help="Only process titan armor")
 parser.add_argument("--tier", type=int, help="Minimum build tier")
 parser.add_argument("armor_file", type=str, help="armor.csv file from DIM")
 args = parser.parse_args()
@@ -24,6 +27,15 @@ if args.tier is None:
 else:
     TIER_LIMIT = args.tier
 ARMOR_FILE = args.armor_file
+
+if args.hunter:
+    CLASS = "Hunter"
+elif args.warlock:
+    CLASS = "Warlock"
+elif args.titan:
+    CLASS = "Titan"
+else:
+    CLASS = "Any"
 
 
 class Stat(Enum):
@@ -222,40 +234,6 @@ class Build(List):
         return True
 
 
-class try_achieve_build(list):
-    def __init__(self, build: List[Armor], mods_used: int = 0):
-        self.extend(build)
-        self.mods_used = mods_used
-
-    def _general_stat_func(self, stat_name: str, stat: int):
-        while True:
-            gulf = self[int(Stat(stat_name.upper()))] - stat
-            if gulf > 5:
-                self.mods_used += 1
-                self[int(Stat(stat_name.upper()))] += 10
-            else:
-                break
-        return self
-
-    def mobility(self, mobility: int):
-        return self._general_stat_func("mobility")
-
-    def resilience(self, resilience: int):
-        return self._general_stat_func("resilience")
-
-    def recovery(self, recovery: int):
-        return self._general_stat_func("recovery")
-
-    def discipline(self, discipline: int):
-        return self._general_stat_func("discipline")
-
-    def intellect(self, intellect: int):
-        return self._general_stat_func("intellect")
-
-    def strength(self, strength: int):
-        return self._general_stat_func("strength")
-
-
 def generic_class_items() -> List[Armor]:
     # Add generic class items
     li = []
@@ -311,9 +289,13 @@ with open(ARMOR_FILE, "rb", buffering=0) as csvfile:
     csvfile_hash = sha1.hexdigest()
 
 try:
-    # Load pickle file as cache here
-    with open(str(csvfile_hash) + ".pickle", "rb") as processed_armor:
-        combined_armor_list = pickle.load(processed_armor)
+    try:
+        # Load pickle file as cache here
+        with open(str(csvfile_hash) + CLASS + ".pickle", "rb") as processed_armor:
+            combined_armor_list = pickle.load(processed_armor)
+    except FileNotFoundError:
+        with open(str(csvfile_hash) + "Any" + ".pickle", "rb") as processed_armor:
+            combined_armor_list = pickle.load(processed_armor)
 except FileNotFoundError:
     with open(ARMOR_FILE) as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
@@ -321,6 +303,8 @@ except FileNotFoundError:
             if idx == 0:
                 continue
             armor = Armor.from_csv_row(row)
+            if not (armor.d2_class == CLASS or CLASS == "Any"):
+                continue
             if armor.slot.lower() == "helmet":
                 slot = 0
             elif armor.slot.lower() == "gauntlets":
@@ -362,7 +346,7 @@ except FileNotFoundError:
         + armor_lists[4]
     )
     # Create a pickle file as a cache here
-    with open(str(csvfile_hash) + ".pickle", "wb") as processed_armor:
+    with open(str(csvfile_hash) + CLASS + ".pickle", "wb") as processed_armor:
         pickle.dump(combined_armor_list, processed_armor)
 
 
