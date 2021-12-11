@@ -17,13 +17,13 @@ parser.add_argument("--warlock", action="store_true", help="Only process warlock
 parser.add_argument("--titan", action="store_true", help="Only process titan armor")
 parser.add_argument(
     "--score",
-    type=int,
+    type=float,
     help=("Minimum build score, scores range from the negatives to 32.2"),
 )
 parser.add_argument("armor_file", type=str, help="armor.csv file from DIM")
 args = parser.parse_args()
 if args.score is None:
-    SCORE_LIMIT = 157  # Score based on my current vault
+    SCORE_LIMIT = 11.8  # Score based on my current vault
 else:
     SCORE_LIMIT = args.score
 ARMOR_FILE = args.armor_file
@@ -198,14 +198,7 @@ class Build(List):
 
     def calculate_tier(build):
         # Calculate effective tiers
-        individual_tiers = [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ]
+        individual_tiers = [0] * 6
         for idx in range(len(build.stats)):
             build.add_mods()
             individual_tiers[idx] = build.stats[idx] // 10
@@ -261,7 +254,7 @@ def save_exotics(armor_list):
     # if all exotics with a name are not marked to be saved
     # mark all of them to show they shouldn't be dismantled
     for name in exotic_lists_by_name:
-        if all([armor.mark < SCORE_LIMIT for armor in exotic_lists_by_name[name]]):
+        if all([armor.score < SCORE_LIMIT for armor in exotic_lists_by_name[name]]):
             for armor in exotic_lists_by_name[name]:
                 armor.score = 9999
 
@@ -354,13 +347,19 @@ for armor in combined_armor_list:
     if armor.slot == 4:
         continue
     armor.score = (
-        (armor.mark - 34) * 1.2  # 0 to 3.6
-        + (sum(armor.stats) - 58) * 1.5  # 0 to 15
+        (armor.mark - 35) * 2  # 0 to 4
+        # Weighted stat total score:
+        # Old Formula:
+        # + (sum(armor.stats) - 62) * 2  # 0 to 12
+        # New formula:
+        # The x in x ** 0.5 is the pivot, 72 - x scores 0, 72 scores 1
+        # Scores 0 to 18 but mean closer to 3 to 4
+        + (13 ** 0.8 - (72 - sum(armor.stats)) ** 0.8) / 13 ** 0.8 * 18
         # Meta dependent scores:
         + (armor.stats[Stat.RECOVERY.value] - 2) * 0.2  # 0 to 5.6
         # Spike score to allow flexibility:
-        + (sum(armor.stats[:3]) - min(armor.stats[:3]) - 16) * 0.25  # 0 to 4
-        + (sum(armor.stats[3:]) - min(armor.stats[3:]) - 16) * 0.25  # 0 to 4
+        + (sum(armor.stats[:3]) - min(armor.stats[:3]) - 16) * 0.3  # 0 to 4.8
+        + (sum(armor.stats[3:]) - min(armor.stats[3:]) - 16) * 0.3  # 0 to 4.8
     )
 
 
