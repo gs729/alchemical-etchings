@@ -16,16 +16,13 @@ parser.add_argument("--hunter", action="store_true", help="Only process hunter a
 parser.add_argument("--warlock", action="store_true", help="Only process warlock armor")
 parser.add_argument("--titan", action="store_true", help="Only process titan armor")
 parser.add_argument(
-    "--score",
-    type=float,
-    help=("Minimum build score, scores range from the negatives to 32.2"),
+    "--bottom",
+    type=int,
+    help=("Prints the bottom x armor pieces"),
 )
 parser.add_argument("armor_file", type=str, help="armor.csv file from DIM")
 args = parser.parse_args()
-if args.score is None:
-    SCORE_LIMIT = 11.8  # Score based on my current vault
-else:
-    SCORE_LIMIT = args.score
+BOTTOM = args.bottom
 ARMOR_FILE = args.armor_file
 
 if args.hunter:
@@ -236,6 +233,10 @@ def generic_class_items() -> List[Armor]:
     return li
 
 
+def sort_by_score(armor):
+    return armor.score
+
+
 def save_exotics(armor_list):
     # List all exotics
     exotic_list = []
@@ -254,9 +255,12 @@ def save_exotics(armor_list):
     # if all exotics with a name are not marked to be saved
     # mark all of them to show they shouldn't be dismantled
     for name in exotic_lists_by_name:
-        if all([armor.score < SCORE_LIMIT for armor in exotic_lists_by_name[name]]):
+        if all(
+            [armor_list.index(armor) < BOTTOM for armor in exotic_lists_by_name[name]]
+        ):
             for armor in exotic_lists_by_name[name]:
                 armor.score = 9999
+    armor_list.sort(key=sort_by_score)
 
 
 def save_class_items(armor_list):
@@ -268,6 +272,7 @@ def save_class_items(armor_list):
             or armor.slot.lower() == "leg armor"
         ):
             armor.score = 9999
+    armor_list.sort(key=sort_by_score)
 
 
 armor_lists: List[List[Armor]] = [[], [], [], [], []]
@@ -363,6 +368,7 @@ for armor in combined_armor_list:
     )
 
 
+combined_armor_list.sort(key=sort_by_score)
 save_exotics(combined_armor_list)
 save_class_items(combined_armor_list)
 
@@ -373,7 +379,7 @@ unmarked_armor_counter = 0
 
 
 for armor in combined_armor_list:
-    if armor.score < SCORE_LIMIT and armor.slot != 4:
+    if combined_armor_list.index(armor) < BOTTOM and armor.slot != 4:
         unmarked_armor_counter += 1
         query += " or id:" + str(armor.id)
 query = query[4:]
