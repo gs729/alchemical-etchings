@@ -312,7 +312,7 @@ except FileNotFoundError:
             elif armor.slot.lower() == "leg armor":
                 slot = 3
             else:
-                pass
+                continue
             armor_lists[slot].append(armor)
 
     armor_lists[4] = generic_class_items()
