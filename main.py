@@ -8,7 +8,7 @@ from typing import Dict, List
 from enum import Enum
 
 # Positions of id, name, d2_class, exotic, slot, mob, res, rec, dis, int, str in the CSV Row
-CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32]
+CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32, 3, 14]
 
 # Argument parsing
 parser = argparse.ArgumentParser(description="List armor to dismantle")
@@ -89,6 +89,8 @@ class Armor:
         discipline,
         intellect,
         strength,
+        tag,
+        locked,
     ):
         self.id = id
         self.name = name
@@ -104,6 +106,8 @@ class Armor:
         self.stats[Stat.DISCIPLINE.value] = discipline
         self.stats[Stat.INTELLECT.value] = intellect
         self.stats[Stat.STRENGTH.value] = strength
+        self.tag = tag.lower()
+        self.locked = str(locked).lower() == "true"
 
     def __le__(self, other):
         if all([self.stats[i] <= other.stats[i] for i in range(6)]):
@@ -146,12 +150,9 @@ class Armor:
                     str(self.d2_class),
                     str(self.is_exotic),
                     str(self.slot),
-                    str(self.mobility),
-                    str(self.resilience),
-                    str(self.recovery),
-                    str(self.discipline),
-                    str(self.intellect),
-                    str(self.strength),
+                    str(self.stats),
+                    str(self.tag),
+                    "Locked" if self.locked else "Unlocked",
                 ]
             )
             + ")"
@@ -227,9 +228,45 @@ class Build(List):
 def generic_class_items() -> List[Armor]:
     # Add generic class items
     li = []
-    li.append(Armor(0, "Class Item", "Hunter", False, "Class Item", 0, 0, 0, 0, 0, 0))
-    li.append(Armor(0, "Class Item", "Warlock", False, "Class Item", 0, 0, 0, 0, 0, 0))
-    li.append(Armor(0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0))
+    li.append(
+        Armor(
+            0,
+            "Class Item",
+            "Hunter",
+            False,
+            "Class Item",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            "",
+            "FALSE",
+        )
+    )
+    li.append(
+        Armor(
+            0,
+            "Class Item",
+            "Warlock",
+            False,
+            "Class Item",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            "",
+            "FALSE",
+        )
+    )
+    li.append(
+        Armor(
+            0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0, "", "FALSE"
+        )
+    )
     return li
 
 
@@ -271,6 +308,20 @@ def save_class_items(armor_list):
             or armor.slot.lower() == "chest armor"
             or armor.slot.lower() == "leg armor"
         ):
+            armor.score = 9999
+    armor_list.sort(key=sort_by_score)
+
+
+def save_tagged(armor_list):
+    for armor in armor_list:
+        if armor.tag != "":
+            armor.score = 9999
+    armor_list.sort(key=sort_by_score)
+
+
+def save_locked(armor_list):
+    for armor in armor_list:
+        if armor.locked:
             armor.score = 9999
     armor_list.sort(key=sort_by_score)
 
@@ -369,25 +420,32 @@ for armor in combined_armor_list:
 
 
 combined_armor_list.sort(key=sort_by_score)
-save_exotics(combined_armor_list)
 save_class_items(combined_armor_list)
-
+save_tagged(combined_armor_list)
+save_locked(combined_armor_list)
+# Note: Save exotics needs to be last since
+# it saves those about to be marked for dismantling
+id_list = [[]]
+while True:
+    id_list.append([])
+    for idx, armor in enumerate(combined_armor_list):
+        if idx < BOTTOM:
+            id_list[-1].append(armor.id)
+    if id_list[-1] == id_list[-2]:
+        break
+    save_exotics(combined_armor_list)
 
 # Generate a DIM query to highlight all useless armor
 query = str()
 unmarked_armor_counter = 0
 
 
-for armor in combined_armor_list:
-    if combined_armor_list.index(armor) < BOTTOM and armor.slot != 4:
+for idx, armor in enumerate(combined_armor_list):
+    if idx < BOTTOM:
         unmarked_armor_counter += 1
         query += " or id:" + str(armor.id)
 query = query[4:]
 
-for armor in combined_armor_list:
-    if armor.slot == 4:
-        continue
-    print(armor.id, armor.score)
+print("Number of junk armor pieces:", unmarked_armor_counter)
 
 print("\n" + query + "\n")
-print("Number of junk armor pieces:", unmarked_armor_counter)
