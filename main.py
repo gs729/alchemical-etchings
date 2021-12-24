@@ -8,7 +8,7 @@ from typing import Dict, List
 from enum import Enum
 
 # Positions of id, name, d2_class, exotic, slot, mob, res, rec, dis, int, str in the CSV Row
-CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32, 3, 14]
+CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32, 3, 14, 11]
 
 # Argument parsing
 parser = argparse.ArgumentParser(description="List armor to dismantle")
@@ -91,6 +91,7 @@ class Armor:
         strength,
         tag,
         locked,
+        masterwork_tier,
     ):
         self.id = id
         self.name = name
@@ -108,6 +109,7 @@ class Armor:
         self.stats[Stat.STRENGTH.value] = strength
         self.tag = tag.lower()
         self.locked = str(locked).lower() == "true"
+        self.is_masterworked = int(masterwork_tier) == 10
 
     def __le__(self, other):
         if all([self.stats[i] <= other.stats[i] for i in range(6)]):
@@ -153,6 +155,7 @@ class Armor:
                     str(self.stats),
                     str(self.tag),
                     "Locked" if self.locked else "Unlocked",
+                    "Masterworked" if self.is_masterworked else "Unmasterworked,",
                 ]
             )
             + ")"
@@ -243,6 +246,7 @@ def generic_class_items() -> List[Armor]:
             0,
             "",
             "FALSE",
+            10,
         )
     )
     li.append(
@@ -260,11 +264,25 @@ def generic_class_items() -> List[Armor]:
             0,
             "",
             "FALSE",
+            10,
         )
     )
     li.append(
         Armor(
-            0, "Class Item", "Titan", False, "Class Item", 0, 0, 0, 0, 0, 0, "", "FALSE"
+            0,
+            "Class Item",
+            "Titan",
+            False,
+            "Class Item",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            "",
+            "FALSE",
+            10,
         )
     )
     return li
@@ -322,6 +340,13 @@ def save_tagged(armor_list):
 def save_locked(armor_list):
     for armor in armor_list:
         if armor.locked:
+            armor.score = 9999
+    armor_list.sort(key=sort_by_score)
+
+
+def save_masterworked(armor_list):
+    for armor in armor_list:
+        if armor.is_masterworked:
             armor.score = 9999
     armor_list.sort(key=sort_by_score)
 
@@ -423,6 +448,7 @@ combined_armor_list.sort(key=sort_by_score)
 save_class_items(combined_armor_list)
 save_tagged(combined_armor_list)
 save_locked(combined_armor_list)
+save_masterworked(combined_armor_list)
 # Note: Save exotics needs to be last since
 # it saves those about to be marked for dismantling
 id_list = [[]]
