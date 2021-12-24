@@ -469,9 +469,10 @@ unmarked_armor_counter = 0
 for idx, armor in enumerate(combined_armor_list):
     if idx < BOTTOM:
         unmarked_armor_counter += 1
+        print(armor)
         query += " or id:" + str(armor.id)
 query = query[4:]
 
-print("Number of junk armor pieces:", unmarked_armor_counter)
+print("\n\nNumber of junk armor pieces:", unmarked_armor_counter)
 
 print("\n" + query + "\n")
