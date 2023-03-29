@@ -1,14 +1,33 @@
-import csv
 import argparse
+import csv
 import hashlib
 import itertools
 import pickle
-from tqdm import tqdm
-from typing import Dict, List
 from enum import Enum
+from typing import Dict, List
+
+import clipboard
+from tqdm import tqdm
 
 # Positions of id, name, d2_class, exotic, slot, mob, res, rec, dis, int, str in the CSV Row
-CSV_ROW_DEFN = [2, 0, 7, 4, 5, 27, 28, 29, 30, 31, 32, 3, 14, 11]
+CSV_ROW_DEFN = [
+    2,  # id
+    0,  # name
+    7,  # d2_class
+    4,  # is_exotic
+    5,  # slot
+    19,  # mobility
+    20,  # resilience
+    21,  # recovery
+    22,  # discipline
+    23,  # intellect
+    24,  # strength
+    3,  # tag
+    12,  # locked
+    10,  # masterwork_tier
+    31,  # is_artifice
+]
+
 
 # Argument parsing
 parser = argparse.ArgumentParser(description="List armor to dismantle")
@@ -92,6 +111,7 @@ class Armor:
         tag,
         locked,
         masterwork_tier,
+        is_artifice,
     ):
         self.id = id
         self.name = name
@@ -101,15 +121,16 @@ class Armor:
         self.mark: int = 0
         self.score: float
         self.stats = [0] * 6
-        self.stats[Stat.MOBILITY.value] = mobility
-        self.stats[Stat.RESILIENCE.value] = resilience
-        self.stats[Stat.RECOVERY.value] = recovery
-        self.stats[Stat.DISCIPLINE.value] = discipline
-        self.stats[Stat.INTELLECT.value] = intellect
-        self.stats[Stat.STRENGTH.value] = strength
+        self.stats[Stat.MOBILITY.value] = int(mobility)
+        self.stats[Stat.RESILIENCE.value] = int(resilience)
+        self.stats[Stat.RECOVERY.value] = int(recovery)
+        self.stats[Stat.DISCIPLINE.value] = int(discipline)
+        self.stats[Stat.INTELLECT.value] = int(intellect)
+        self.stats[Stat.STRENGTH.value] = int(strength)
         self.tag = tag.lower()
         self.locked = str(locked).lower() == "true"
         self.is_masterworked = int(masterwork_tier) == 10
+        self.is_artifice = is_artifice
 
     def __le__(self, other):
         if all([self.stats[i] <= other.stats[i] for i in range(6)]):
@@ -170,6 +191,10 @@ class Armor:
             self.is_exotic = True
         else:
             self.is_exotic = False
+        if self.is_artifice.lower() == "artifice":
+            self.is_artifice = True
+        else:
+            self.is_artifice = False
         self.stats = [int(stat) for stat in self.stats]
         return self
 
@@ -247,6 +272,7 @@ def generic_class_items() -> List[Armor]:
             "",
             "FALSE",
             10,
+            True,
         )
     )
     li.append(
@@ -265,6 +291,7 @@ def generic_class_items() -> List[Armor]:
             "",
             "FALSE",
             10,
+            True,
         )
     )
     li.append(
@@ -283,6 +310,7 @@ def generic_class_items() -> List[Armor]:
             "",
             "FALSE",
             10,
+            True,
         )
     )
     return li
@@ -376,7 +404,11 @@ except FileNotFoundError:
         for idx, row in enumerate(reader):
             if idx == 0:
                 continue
-            armor = Armor.from_csv_row(row)
+            try:
+                armor = Armor.from_csv_row(row)
+            except Exception as e:
+                print("Error with armor row: " + str(row))
+                raise e
             if not (armor.d2_class == CLASS or CLASS == "Any"):
                 continue
             if armor.slot.lower() == "helmet":
@@ -435,7 +467,7 @@ for armor in combined_armor_list:
         # New formula:
         # The x in x ** 0.5 is the pivot, 72 - x scores 0, 72 scores 1
         # Scores 0 to 18 but mean closer to 3 to 4
-        + (13 ** 0.8 - (72 - sum(armor.stats)) ** 0.8) / 13 ** 0.8 * 18
+        + (13**0.8 - (72 - sum(armor.stats)) ** 0.8) / 13**0.8 * 18
         # Meta dependent scores:
         + (armor.stats[Stat.RECOVERY.value] - 2) * 0.2  # 0 to 5.6
         # Spike score to allow flexibility:
@@ -476,3 +508,4 @@ query = query[4:]
 print("\n\nNumber of junk armor pieces:", unmarked_armor_counter)
 
 print("\n" + query + "\n")
+clipboard.copy(query)
