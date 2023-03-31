@@ -461,13 +461,18 @@ for armor in combined_armor_list:
         # + (sum(armor.stats) - 62) * 2  # 0 to 12
         # New formula:
         # The x in x ** 0.5 is the pivot, 72 - x scores 0, 72 scores 1
-        # Scores 0 to 18 but mean closer to 3 to 4
-        + (13**0.8 - (72 - sum(armor.stats)) ** 0.8) / 13**0.8 * 18
+        # Scores 0 to 20 but mean closer to 3.33 to 4.44
+        # Also includes artifice armor in the total since they are free stats
+        + (13**0.8 - (72 - sum(armor.stats) + (3 * int(armor.is_artifice))) ** 0.8)
+        / 13**0.8
+        * 20
         # Meta dependent scores:
         + (armor.stats[Stat.RECOVERY.value] - 2) * 0.2  # 0 to 5.6
         # Spike score to allow flexibility:
-        + (sum(armor.stats[:3]) - min(armor.stats[:3]) - 16) * 0.3  # 0 to 4.8
-        + (sum(armor.stats[3:]) - min(armor.stats[3:]) - 16) * 0.3  # 0 to 4.8
+        + (sum(armor.stats[:3]) - min(armor.stats[:3]) - 16) * 0.35  # 0 to 5.6
+        + (sum(armor.stats[3:]) - min(armor.stats[3:]) - 16) * 0.35  # 0 to 5.6
+        # Artifice score to increase flexibility:
+        + 2 * int(armor.is_artifice)  # 0 to 2
     )
 
 
