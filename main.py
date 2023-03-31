@@ -16,12 +16,12 @@ CSV_ROW_DEFN = [
     7,  # d2_class
     4,  # is_exotic
     5,  # slot
-    19,  # mobility
-    20,  # resilience
-    21,  # recovery
-    22,  # discipline
-    23,  # intellect
-    24,  # strength
+    24,  # mobility
+    25,  # resilience
+    26,  # recovery
+    27,  # discipline
+    28,  # intellect
+    29,  # strength
     3,  # tag
     12,  # locked
     10,  # masterwork_tier
@@ -131,6 +131,8 @@ class Armor:
         self.locked = str(locked).lower() == "true"
         self.is_masterworked = int(masterwork_tier) == 10
         self.is_artifice = is_artifice
+        if sum(self.stats) > 72:
+            raise ValueError("Armor stats cannot exceed 72. {}".format(self.stats))
 
     def __le__(self, other):
         if all([self.stats[i] <= other.stats[i] for i in range(6)]):
@@ -200,15 +202,45 @@ class Armor:
 
 
 class Build(List):
-    def __init__(self, armor_list: List[Armor], mods_used: int = 0):
+    def __init__(
+        self, armor_list: List[Armor], mods_used: int = 0, artifice_mods_used: int = 0
+    ):
         self.extend(armor_list)
         self.mods_used = mods_used
+        self.artifice_slots = sum([1 for armor in self if armor.is_artifice])
+        self.artifice_mods_used = artifice_mods_used
         self.stats = [0, 0, 0, 0, 0, 0]
         for armor in self:
             for stat in Stat:
                 self.stats[stat.value] += armor.stats[stat.value]
 
     def add_mods(build):
+        for artifice_mod_no in range(build.artifice_slots - build.artifice_mods_used):
+            for idx, tier in enumerate(build.stats):
+                if (
+                    tier < 100
+                    and (
+                        (tier % 10)
+                        + 3 * (build.artifice_slots - build.artifice_mods_used)
+                    )
+                    > 10
+                ):
+                    build.stats[idx] += 3
+                    build.artifice_mods_used += 1
+                    break
+        for artifice_mod_no in range(build.artifice_slots - build.artifice_mods_used):
+            for idx, tier in enumerate(build.stats):
+                if (
+                    tier < 100
+                    and (
+                        (tier % 5)
+                        + 3 * (build.artifice_slots - build.artifice_mods_used)
+                    )
+                    > 5
+                ):
+                    build.stats[idx] += 3
+                    build.artifice_mods_used += 1
+                    break
         for idx, tier in enumerate(build.stats):
             # This formula checks if a tier can benefit from a +5 mod
             if tier % 10 > 5 and build.mods_used < 5:
@@ -256,63 +288,26 @@ class Build(List):
 def generic_class_items() -> List[Armor]:
     # Add generic class items
     li = []
-    li.append(
-        Armor(
-            0,
-            "Class Item",
-            "Hunter",
-            False,
-            "Class Item",
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            "",
-            "FALSE",
-            10,
-            True,
+    for class_name in ["Hunter", "Warlock", "Titan"]:
+        li.append(
+            Armor(
+                0,
+                "Class Item",
+                class_name,
+                False,
+                "Class Item",
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                "",
+                "FALSE",
+                10,
+                True,
+            )
         )
-    )
-    li.append(
-        Armor(
-            0,
-            "Class Item",
-            "Warlock",
-            False,
-            "Class Item",
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            "",
-            "FALSE",
-            10,
-            True,
-        )
-    )
-    li.append(
-        Armor(
-            0,
-            "Class Item",
-            "Titan",
-            False,
-            "Class Item",
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            "",
-            "FALSE",
-            10,
-            True,
-        )
-    )
     return li
 
 
